@@ -15,6 +15,7 @@ import requests
 import srtm
 from datetime import datetime, timezone
 from SBI_embedding import PhysicsEmbedding
+import shutil
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import LogLocator, LogFormatterSciNotation, NullFormatter
@@ -37,6 +38,14 @@ params = {'text.usetex' : True,
           'axes.prop_cycle' : mpl.cycler(color=my_colors),
           'legend.frameon' : False}
 rcParams.update(params)
+
+if shutil.which("latex") and shutil.which("dvipng"):
+    rcParams["text.usetex"] = True
+else:
+    rcParams["text.usetex"] = False
+    rcParams["mathtext.fontset"] = "cm"
+    rcParams["font.family"] = "serif"
+    
 cmap = plt.get_cmap("tab10")
 
 prior_min = np.array( [ 40.0,  0.15, 0.0018, 0.0001 ] )
@@ -652,7 +661,7 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
     for ax in axes[3, :]:
         ax.tick_params(axis="x", labelrotation=45)
 
-    plt.show()
+    # plt.show()
     return fig
 
 def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
@@ -708,7 +717,7 @@ def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
     ax.set_title(title)
     if out_name is not None:
         plt.savefig(out_name, bbox_inches='tight')
-    plt.show()
+    # plt.show()
     return inferred_powers, fig, (np.sum(inferred_powers), np.sum(power[mask]))
 
 PARAM_NAMES = ['mass', 'CdA', 'Crr', 'k']
