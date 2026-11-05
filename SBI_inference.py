@@ -795,6 +795,7 @@ def ride_analysis(data, sys_mass=None, corner=True, pie=True, inj_rec=None, p_th
     # data[8] *= 1.2  # testing PM scaling
     chunks = process_ride_to_chunks(f_name=None, data=data)
     ride_tensor = torch.tensor(chunks, dtype=torch.float32)
+    num_segs = chunks.shape[0]
     (m, cda, crr, k), n_eff = analyze_ride(ride_tensor, USE_MASS_PRIOR=False, sys_mass=sys_mass)
     m0 = np.copy(m)
     if USE_MASS_PRIOR:
@@ -808,7 +809,7 @@ def ride_analysis(data, sys_mass=None, corner=True, pie=True, inj_rec=None, p_th
         powers, pie_fig, work = plot_pie(data, (m, cda, crr, k), title=None, p_thresh=p_thresh)
     if inj_rec is not None:
         test = inj_recov(chunks, (m, cda, crr, k), use_prior=USE_MASS_PRIOR, n_rep=inj_rec, accel_sigma=3, accel_mode='smooth', sys_mass=sys_mass)
-    return (m, cda, crr, k), (corner_fig, pie_fig), m0, work
+    return (m, cda, crr, k), (corner_fig, pie_fig), m0, work, num_segs
 
 sys.modules['__main__'].PhysicsEmbedding = PhysicsEmbedding
 

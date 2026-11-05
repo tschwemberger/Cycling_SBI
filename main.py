@@ -26,8 +26,11 @@ if up is not None:
         os.remove(path)
 
     with st.spinner("Inferring posterior distributions..."):
-        params, (corner_fig, pie_fig), m0, work = ride_analysis(ride, sys_mass=sys_mass, NUM_SAMPLES=100000)
+        params, (corner_fig, pie_fig), m0, work, num_segs = ride_analysis(ride, sys_mass=sys_mass, NUM_SAMPLES=100000)
         work_inf, work_rec = work
+    st.write(f'{num_segs} clean 90s windows identified')
+    if num_segs < 30:
+        st.warning("This may not be enough data to make reasonable inferences")
     if use_prior:
         if np.abs(m0-sys_mass)/sys_mass > 0.15:
             st.warning(f"The estimated system mass of {m0:.1f} kg differs from input {sys_mass:.1f} kg by more than 15%. This may result in inaccurate estimates. If you're confident in your input mass, this may indicate a problem with the data such a power meter miscalibration or an inconsistency with the model such as unmodeled braking effects or strong correlations between parameters.")
