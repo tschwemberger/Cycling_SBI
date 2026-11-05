@@ -18,7 +18,7 @@ from SBI_embedding import PhysicsEmbedding
 import shutil
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import LogLocator, LogFormatterSciNotation, NullFormatter
+from matplotlib.ticker import LogLocator, FixedFormatter, NullFormatter
 #Options
 my_colors = ['#785EF0', '#DC267F', '#FFB000', '#006352', 'turquoise', 'b', 'r', 'g', 'y']
 from matplotlib import rc, rcParams 
@@ -566,9 +566,10 @@ def analyze_ride(real_ride_tensor, USE_MASS_PRIOR=False, sys_mass=90, widths=Fal
 
 def clean_log_axis(axis):
     axis.set_major_locator(LogLocator(base=10, numticks=10))
-    axis.set_major_formatter(LogFormatterSciNotation(base=10))
     axis.set_minor_locator(LogLocator(base=10, subs=np.arange(2, 10), numticks=100))
     axis.set_minor_formatter(NullFormatter())
+    axis.set_major_formatter(FixedFormatter(['0.3', '1', '3']))
+    axis.set_ticks([0.3, 1.0, 3.0])
 
 def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=100000):
     if sys_mass is not None:
@@ -651,8 +652,7 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
 
     axes = np.array(fig.axes).reshape(4, 4)
     clean_log_axis(axes[3, 3].xaxis)          # k_surf histogram (x axis)
-    for j in range(3):
-        clean_log_axis(axes[3, j].yaxis)      # k_surf on the y axis of the bottom row
+    clean_log_axis(axes[3, 0].yaxis)      # k_surf on the y axis of the bottom row
 
     fig.align_ylabels(axes[:, 0])
     for ax in axes[3, :]:
