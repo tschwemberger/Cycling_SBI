@@ -39,12 +39,9 @@ params = {'text.usetex' : True,
           'legend.frameon' : False}
 rcParams.update(params)
 
-if shutil.which("latex") and shutil.which("dvipng"):
-    rcParams["text.usetex"] = True
-else:
-    rcParams["text.usetex"] = False
-    rcParams["mathtext.fontset"] = "cm"
-    rcParams["font.family"] = "serif"
+rcParams["text.usetex"] = False
+rcParams["mathtext.fontset"] = "cm"
+rcParams["font.family"] = "serif"
     
 cmap = plt.get_cmap("tab10")
 
@@ -704,12 +701,12 @@ def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
     
     percentages = 100 * inferred_powers / inferred_powers.sum()
     labels = ['Climbs', 'Accelerations', 'Aero', 'Tires', 'Surface']
-    legend_labels = [f'{label} ('+f'{pct:.1f}'+r'\%)' for label, pct in zip(labels, percentages)]
+    legend_labels = [f'{label} ('+f'{pct:.1f}'+r'%)' for label, pct in zip(labels, percentages)]
 
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.pie(inferred_powers, labels=None, autopct='%1.1f%%', pctdistance=0.8)
     
-    param_text = (f"$m_{{sys}}$ = {m:.1f} kg\n $C_d A$ = {cda:.3f} $m^2$\n $k_{{surf}}$ = {1e3*k:.3g}\n $C_{{rr}}$ ~ = {crr:.4f}")
+    param_text = (f"$m_{{sys}}$ = {m:.1f} kg\n$C_d A$ = {cda:.3f} $m^2$\n$k_{{surf}}$ = {1e3*k:.3g}\n$C_{{rr}}$   = {crr:.4f}")
     ax.text(0.96, 0.3, param_text, transform=ax.transAxes, va='center', ha='left', fontsize=20)
 
     fig.tight_layout()
