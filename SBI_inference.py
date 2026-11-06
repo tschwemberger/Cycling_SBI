@@ -706,7 +706,12 @@ def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.pie(inferred_powers, labels=None, autopct='%1.1f%%', pctdistance=0.8)
     
-    param_text = (rf"$m_{{sys}}$ = {m:.1f} kg\n$C_d A$ = {cda:.3f} $m^2$\n$C_{{rr}}^{{(i)}}$ = {1e3*k:.2g}$\times 10^{{-3}}$\n$C_{{rr}}^{{(h)}}$   = {crr:.4f}")
+    param_text = "\n".join([
+        rf"$m_{{sys}}$ = {m:.1f} kg",
+        rf"$C_d A$ = {cda:.3f} $m^2$",
+        rf"$C_{{rr}}^{{(i)}}$ = {1e3*k:.2g}$\times 10^{{-3}}$",
+        rf"$C_{{rr}}^{{(h)}}$   = {crr:.4f}",
+    ])
     ax.text(0.96, 0.3, param_text, transform=ax.transAxes, va='center', ha='left', fontsize=18)
 
     fig.tight_layout()
