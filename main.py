@@ -40,15 +40,10 @@ if up is not None:
     if np.abs(work_inf-work_rec)/work_rec > 0.1:
         st.warning(f'At the inferred paramters, the work required in the clean segments is {int(work_inf/1e3)} kJ while the recorded work is {int(work_rec/1e3)} kJ, a difference of {int(100*np.abs(work_inf-work_rec)/work_rec)}\%. This indicates the model may be a poor fit to the data.')
 
-
     st.write('## Distribution of Losses While Pedaling')
     st.write('The pie chart below shows the distribution of losses while pedaling, based on the inferred parameters. The model estimates how much of your power is going into overcoming gravity, aerodynamic drag, rolling resistance, and surface vibration losses. The remaining power drives your accelerations. This chart does not reflect the recovery you get while coasting.')
     st.pyplot(pie_fig)
     st.write('Rolling resistance is divided into two components, hysteretic losses $C_{rr}^{(h)}$ and surface impedance, parameterized by $C_{rr}^{(i)}$ with the latter spanning a wide range from smooth roads with $C_{rr}^{(i)}\lesssim 1$ to rough gravel, mud, or snow with $C_{rr}^{(i)}\sim 10$. I will provide additional details of this surface resistance function is forthcoming documentation.')
-
-    st.write('### Selection of Data')
-    st.write('The selection criteria for the 90s windows may bias your results towards climbing sections since they are much more likely to survive the filters. Here you can see how the full data set compares to the subset which the network finds to be useable. Note that all steep descents are removed as are corners, suspected braking, and hike-a-bikes.')
-    st.pyplot(hist_fig)
     
     st.write('## Posterior Distributions of Parameters')
     st.pyplot(corner_fig)
@@ -57,3 +52,9 @@ if up is not None:
     st.write('The model assumes surface vibrational losses are a fixed function of only speed. If the quality of the surface is correlated with other parameters such as gradient, this may result in degeneracies in the inferred parameters. For instance, if rough surfaces are strongly correlated with steep gradients, the model will have difficulty distinguishing higher mass from higher surface losses. The resolution of the network is limited by the number of samples, GPS noise, and barometric glitches. The effect of hysteretical losses $(C_{rr})$ is generally below this threshold, so that panel should be viewed as a rough estimate, largely degenerate with surface losses $(C_{rr}^{(i)})$.')
     
     st.write('Also note that the function defining surface losses is not well studied. As such, it is defined with a wide range of marginalized parameters allowing it to act as a "sink" term, soaking up all losses which do not fit the other, well modeled parameters. This makes it particularly sensitive to features like unmodeled braking.')
+
+    show_hist = st.checkbox("Show selection bias in segment filering", value=False)
+    if show_hist:
+        st.write('### Selection of Data')
+        st.write('The selection criteria for the 90s windows may bias your results towards climbing sections since they are much more likely to survive the filters. Here you can see how the full data set compares to the subset which the network finds to be useable. Note that all steep descents are removed as are corners, suspected braking, and hike-a-bikes.')
+        st.pyplot(hist_fig)
