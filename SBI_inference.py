@@ -69,9 +69,9 @@ def accel_min(grad, speed, wind, rho, params_l=prior_min, params_h=prior_max, im
              + 0.5*rho * CdA_max * (speed+wind)**2/m_min
              + F_imp_over_m(speed, grad, k_max, v_roll, sigma_roll, amp))
 
-def braking_mask(accel, power, speed, grad, wind, rho, P_lo=30.0, t_strong=0.8,
+def braking_mask(accel, power, speed, grad, wind, rho, P_lo=30.0, t_strong=0.7,
                  v_hi=9.0, buf=3):
-    lo, hi = np.asarray(prior_min), np.asarray(prior_max)      # explicit, so the stale-default trap can't bite
+    lo, hi = np.asarray(prior_min), np.asarray(prior_max)
     a_s, low_p = gaussian_filter(accel, 3), power < P_lo
     flag = (a_s < accel_min(grad, speed, wind, rho, params_l=lo, params_h=hi)) & low_p   # weak tier
     if t_strong is not None:                                    # None disables the strong tier
@@ -398,10 +398,7 @@ def process_track(lats, lons, z, times, power):
     bike_headings = np.append(bike_headings, bike_headings[-1]) # match length
     wind_dir_rad = np.radians(90 - wind_direction)
     angle_diff = bike_headings - wind_dir_rad
-    wind_parallel = base_wind_speed * np.cos(angle_diff)
-    heading_diff = np.diff(bike_headings)
-    heading_diff = (heading_diff + np.pi) % (2 * np.pi) - np.pi
-    heading_rate = np.abs(np.append(heading_diff, 0)) # Pad to match length
+    wind_parallel = -base_wind_speed * np.cos(angle_diff)
  
     # recompute speed from the cleaned track instead of interpolating it
     speed_mid = np.sqrt(np.diff(x)**2 + np.diff(y)**2) / dt
@@ -440,6 +437,8 @@ def process_ride_to_chunks(f_name, data=None, sample_rate_hz=1, window_duration_
     is_clean, flags = compute_clean_mask(t, speed, acceleration, power, grad, wind, rho,
                                         x=x, y=y, grad_limit=grad_limit,
                                         sample_rate_hz=sample_rate_hz)
+    tripped = {name: int(np.sum(f)) for name, f in flags.items() if np.any(f)}
+    print(f"flags tripped: {tripped}")
     
     # Find contiguous "clean" segments [cite: 125]
     clean_transitions = np.diff(is_clean.astype(int))
@@ -732,7 +731,6 @@ def plot_histogram(data, chunks):
     ax.set_xlabel(r'Gradient $(\%)$')
     ax.legend()
     return fig
-
 
 PARAM_NAMES = ['mass', 'CdA', 'Crr', 'k']
 
