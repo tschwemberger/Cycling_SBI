@@ -45,7 +45,7 @@ rcParams["font.family"] = "serif"
     
 cmap = plt.get_cmap("tab10")
 
-prior_min = np.array( [ 40.0,  0.15, 0.0018, 0.0001 ] )
+prior_min = np.array( [ 40.0,  0.17, 0.0015, 0.0001 ] )
 prior_max = np.array( [ 150.0, 0.50, 0.01,   0.015  ] )
 
 p_law_index = 0.25
