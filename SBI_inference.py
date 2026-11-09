@@ -676,7 +676,7 @@ def plot_pie(data, inf_theta, title, out_name=None):
     sigma_roll = uniform(0.7, 1.3) # smoothness of impedance transition
     amp        = np.clip(normal(1, 0.2), 0, np.inf) # amplitude of impedance maximum
 
-    v_air = speed + wind
+    v_air = speed - wind
     F_climb = m * (G * np.sin(np.arctan(grad)))
     F_rolling = crr * m * G * ( np.cos(np.arctan(grad)) )
                             #    * (1-sigmoid(speed, v_roll+2*sigma_roll, sigma_roll) ) )
