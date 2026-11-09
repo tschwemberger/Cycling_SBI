@@ -15,7 +15,7 @@ import requests
 import srtm
 from datetime import datetime, timezone
 from SBI_embedding import PhysicsEmbedding
-import shutil
+# import shutil
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import LogLocator, FixedFormatter, NullFormatter
@@ -46,7 +46,7 @@ rcParams["font.family"] = "serif"
 cmap = plt.get_cmap("tab10")
 
 prior_min = np.array( [ 40.0,  0.15, 0.0018, 0.0001 ] )
-prior_max = np.array( [ 150.0, 0.50, 0.006,  0.01   ] )
+prior_max = np.array( [ 150.0, 0.50, 0.01,   0.015  ] )
 
 p_law_index = 0.25
 G = 9.81
@@ -57,7 +57,8 @@ def sigmoid(x, loc, width):
 
 def F_imp_over_m(v, grad, k, v_roll, sigma_roll, amp):
     return ((k * G * np.cos(np.arctan(grad))
-             * ( (v+1)**p_law_index + amp * np.exp(-( ( v-v_roll) / sigma_roll )**2) ) ))
+             * ( (v+1)**p_law_index + amp * np.exp(-( ( v-v_roll) / sigma_roll )**2) ) )
+             * ( 1 - 0.33*sigmoid(v, v_roll+2*sigma_roll, sigma_roll) ) )
 
 def accel_min(grad, speed, wind, rho, params_l=prior_min, params_h=prior_max, imp_params=(1,5,1)):
     m_min, CdA_min, Crr_min, k_min = params_l
@@ -68,7 +69,7 @@ def accel_min(grad, speed, wind, rho, params_l=prior_min, params_h=prior_max, im
              + 0.5*rho * CdA_max * (speed+wind)**2/m_min
              + F_imp_over_m(speed, grad, k_max, v_roll, sigma_roll, amp))
 
-def braking_mask(accel, power, speed, omega, grad, wind, rho, P_lo=30.0, t_strong=0.8,
+def braking_mask(accel, power, speed, grad, wind, rho, P_lo=30.0, t_strong=0.8,
                  v_hi=9.0, buf=3):
     lo, hi = np.asarray(prior_min), np.asarray(prior_max)      # explicit, so the stale-default trap can't bite
     a_s, low_p = gaussian_filter(accel, 3), power < P_lo
@@ -81,8 +82,8 @@ def braking_mask(accel, power, speed, omega, grad, wind, rho, P_lo=30.0, t_stron
         flag |= strong
     return binary_dilation(flag, iterations=buf) if buf else flag
 
-def sharp_turn_mask(x, y, speed, sample_rate_hz=1, baseline_m=25.0, r_min=20.0,
-                    a_lat_max=1.5, smooth_m=6.0, ds=2.0, dilate_s=3.0):
+def sharp_turn_mask(x, y, speed, sample_rate_hz=1, baseline_m=25.0, r_min=10.0,
+                    a_lat_max=3.5, smooth_m=6.0, ds=2.0, dilate_s=3.0):
     """
     Flags samples in or near sharp turns. x, y are along-ground coordinates in metres.
     Curvature is measured over a fixed arclength baseline, not a fixed time step,
@@ -113,7 +114,7 @@ def sharp_turn_mask(x, y, speed, sample_rate_hz=1, baseline_m=25.0, r_min=20.0,
         flag = binary_dilation(flag, structure=np.ones(2 * k + 1, dtype=bool))
     return flag
 
-def compute_clean_mask(t, speed, acceleration, power, grad, dhdt, wind, rho,
+def compute_clean_mask(t, speed, acceleration, power, grad, wind, rho,
                        x=None, y=None, grad_limit=-0.03, accel_physical_limit=2.0,
                        sample_rate_hz=1, **turn_kw):
     """
@@ -126,7 +127,7 @@ def compute_clean_mask(t, speed, acceleration, power, grad, dhdt, wind, rho,
         'time_gap':          np.append(1.0, np.diff(t)) > 3.0,
         'steep_descent':     uniform_filter1d(grad, size=5, mode='nearest') < grad_limit,
         'walking':           (uniform_filter1d(grad, size=5, mode='nearest') > 0.08) & (power < 50.0),
-        'braking':           braking_mask(acceleration, power, speed, dhdt, grad, wind, rho),
+        'braking':           braking_mask(acceleration, power, speed, grad, wind, rho),
         'sharp_turn':        (sharp_turn_mask(x, y, speed, sample_rate_hz, **turn_kw)
                               if x is not None else np.zeros(len(t), dtype=bool)),
     }
@@ -414,7 +415,7 @@ def process_track(lats, lons, z, times, power):
     rho_0 = 100*pres / (287.058 * (273.15+temp))
     rho = rho_0
  
-    return t, dist, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind_parallel, heading_rate, rho
+    return t, dist, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind_parallel, rho
  
 def import_track(file_path, fmt=None):
     """New entry point: read by format, then process. Same return as the old import_gpx."""
@@ -432,11 +433,11 @@ def process_ride_to_chunks(f_name, data=None, sample_rate_hz=1, window_duration_
     Slices and filters cycling time-series data including parallel wind data
     """
     if data is not None:
-        t, d, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind, dhdt, rho = data
+        t, d, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind, rho = data
     else:
-        t, d, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind, dhdt, rho = import_gpx(f_name)
+        t, d, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind, rho = import_gpx(f_name)
     window_size = int(window_duration_sec * sample_rate_hz)
-    is_clean, flags = compute_clean_mask(t, speed, acceleration, power, grad, dhdt, wind, rho,
+    is_clean, flags = compute_clean_mask(t, speed, acceleration, power, grad, wind, rho,
                                         x=x, y=y, grad_limit=grad_limit,
                                         sample_rate_hz=sample_rate_hz)
     
@@ -513,12 +514,13 @@ def ess(w):
 torch.set_num_threads(4)
 theta_min, theta_max = 0.0, 1.0
 
-V_ROLL, SIG_ROLL = 6.5, 1.0
-LAGS = (0, 1, 2, 3)              # candidate lags (samples) between kinematics and power; negatives allowed
+V_ROLL, SIG_ROLL = 6.0, 1.0
+LAGS = (-2, -1, 0, 1, 2)         # candidate lags (samples) between kinematics and power; negatives allowed
 ROBUST_C = 2.5                   # a window's weight drops below 0.5 once its misfit exceeds ROBUST_C x the ride median
 N_IRLS = 3                       # robust re-fit iterations
 N_REG = 5
-
+MAX_SEGMENTS = 100
+NUM_SAMPLES = 100000
 
 
 def scale_theta_to_unit(theta_phys):
@@ -571,6 +573,9 @@ def clean_log_axis(axis):
     axis.set_major_formatter(FixedFormatter(['0.3', '1', '3']))
     axis.set_ticks([0.3, 1.0, 3.0])
 
+def clean_cda_axis(axis):
+    axis.set_ticks([0.18, 0.26, 0.34, 0.42])
+
 def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=100000):
     if sys_mass is not None:
         USE_MASS_PRIOR = True
@@ -620,13 +625,13 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
 
     samples_np = samples_phys.cpu().numpy().copy()
     samples_np[:, 1] = 10**samples_np[:, 1]
-    samples_np[:, 2] = 100 * 10**samples_np[:, 2]
+    samples_np[:, 2] = 1000 * 10**samples_np[:, 2]
     samples_np[:, 3] = 1000 * 10**samples_np[:, 3]
 
 
     # Parameters
-    labels = [r"$m$ (kg)", r"$C_d A$", r"$100 \times C_{rr}^{(h)}$", r"$1000 \times C_{rr}^{(i)}$"]
-    k_idx = 3  # Column index of k_surf
+    labels = [r"$m$ (kg)", r"$C_d A$", r"$1000 \times C_{rr}^{(h)}$", r"$1000 \times C_{rr}^{(i)}$"]
+    k_idx  = 3  # Column index of k_surf
     n_bins = 20  # or whatever bin count you use for the other axes
 
     axes_scale = ["linear", "linear", "linear", "log"]
@@ -652,24 +657,23 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
 
     axes = np.array(fig.axes).reshape(4, 4)
     clean_log_axis(axes[3, 3].xaxis)          # k_surf histogram (x axis)
-    clean_log_axis(axes[3, 0].yaxis)      # k_surf on the y axis of the bottom row
+    clean_log_axis(axes[3, 0].yaxis)          # k_surf on the y axis of the bottom row
+    clean_cda_axis(axes[3, 1].xaxis)
+    clean_cda_axis(axes[1, 0].yaxis)
 
     fig.align_ylabels(axes[:, 0])
     for ax in axes[3, :]:
         ax.tick_params(axis="x", labelrotation=45)
 
-    # plt.show()
     return fig
 
-def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
-    t, d, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind, dhdt, rho = data
-    mask, flags = compute_clean_mask(t, speed, acceleration, power, grad, dhdt, wind, rho)
-
+def plot_pie(data, inf_theta, title, out_name=None):
+    t, d, x, y, z, z_gps, z_bar, grad, power, speed, acceleration, wind, rho = data
+    mask, flags = compute_clean_mask(t, speed, acceleration, power, grad, wind, rho)
     m, cda, crr, k = inf_theta
-
     accel = gaussian_filter(acceleration, 3)
 
-    v_roll     = uniform(5.0, 8.0) # velocity of maximum impedance
+    v_roll     = uniform(4.0, 8.0) # velocity of maximum impedance
     sigma_roll = uniform(0.7, 1.3) # smoothness of impedance transition
     amp        = np.clip(normal(1, 0.2), 0, np.inf) # amplitude of impedance maximum
 
@@ -696,9 +700,6 @@ def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
                                 np.sum(p_roll[mask]),
                                 np.sum(p_imp[mask])])
     
-    print('Work required at inferred parameters:', np.sum(inferred_powers))
-    print('Work recorded:', np.sum(power[mask]))
-    
     percentages = 100 * inferred_powers / inferred_powers.sum()
     labels = ['Climbs', 'Accelerations', 'Aero', 'Tires', 'Surface']
     legend_labels = [f'{label} ('+f'{pct:.1f}'+r'%)' for label, pct in zip(labels, percentages)]
@@ -709,7 +710,7 @@ def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
     param_text = "\n".join([
         rf"$m_{{sys}}$ = {m:.1f} kg",
         rf"$C_d A$ = {cda:.3f} $m^2$",
-        rf"$C_{{rr}}^{{(h)}}$ = {crr:.4f}",
+        rf"$C_{{rr}}^{{(h)}}$ = {1e3*crr:.2g}$\times 10^{{-3}}$",
         rf"$C_{{rr}}^{{(i)}}$ = {1e3*k:.2g}$\times 10^{{-3}}$",
     ])
     ax.text(0.96, 0.3, param_text, transform=ax.transAxes, va='center', ha='left', fontsize=18)
@@ -721,6 +722,17 @@ def plot_pie(data, inf_theta, title, p_thresh=30, out_name=None):
         plt.savefig(out_name, bbox_inches='tight')
     # plt.show()
     return inferred_powers, fig, (np.sum(inferred_powers), np.sum(power[mask]))
+
+def plot_histogram(data, chunks):
+    power, speed, accel, grad, wind, rho = chunks.reshape(-1, 6).T * 100
+    grad2 = data[7]*100
+    fig, ax = plt.subplots(figsize=(7, 6))
+    ax.hist([gaussian_filter1d(grad, 10), grad2], bins=100, label=['Used segments', 'All data'])
+    ax.set_title('Gradient Distribution')
+    ax.set_xlabel(r'Gradient $(\%)$')
+    ax.legend()
+    return fig
+
 
 PARAM_NAMES = ['mass', 'CdA', 'Crr', 'k']
 
@@ -791,7 +803,7 @@ def inj_recov(processed_ride, params, use_prior=False, n_rep=10,
     print('Calibrated posterior: mean pull ~0, std pull ~1, fraction inside ~0.5')
     return dict(med=meds, p25=p25s, p75=p75s, pull=pull, inside=inside)
 
-def ride_analysis(data, sys_mass=None, corner=True, pie=True, inj_rec=None, p_thresh=30, NUM_SAMPLES=100000):
+def ride_analysis(data, sys_mass=None, corner=True, pie=True, hist=True, inj_rec=None, NUM_SAMPLES=100000):
     if sys_mass is not None:
         USE_MASS_PRIOR = True
     else:
@@ -807,14 +819,23 @@ def ride_analysis(data, sys_mass=None, corner=True, pie=True, inj_rec=None, p_th
         (m, cda, crr, k), n_eff = analyze_ride(ride_tensor, USE_MASS_PRIOR=USE_MASS_PRIOR, sys_mass=sys_mass)
     crr /= 100
     k /= 1e3
-
+    work = None
+    test = None
+    figs = []
     if corner:
         corner_fig = plot_corner(ride_tensor, sys_mass=sys_mass, NUM_SAMPLES=NUM_SAMPLES)
+        figs.append(corner_fig)
     if pie:
-        powers, pie_fig, work = plot_pie(data, (m, cda, crr, k), title=None, p_thresh=p_thresh)
+        powers, pie_fig, work = plot_pie(data, (m, cda, crr, k), title=None)
+        figs.append(pie_fig)
+    if hist:
+        hist_fig = plot_histogram(data, chunks)
+        figs.append(hist_fig)
     if inj_rec is not None:
-        test = inj_recov(chunks, (m, cda, crr, k), use_prior=USE_MASS_PRIOR, n_rep=inj_rec, accel_sigma=3, accel_mode='smooth', sys_mass=sys_mass)
-    return (m, cda, crr, k), (corner_fig, pie_fig), m0, work, num_segs
+        test = inj_recov(chunks, (m, cda, crr, k), use_prior=USE_MASS_PRIOR,
+                        n_rep=inj_rec, accel_sigma=3, accel_mode='smooth', sys_mass=sys_mass)
+    return (m, cda, crr, k), tuple(figs), m0, work, num_segs, test
+
 
 sys.modules['__main__'].PhysicsEmbedding = PhysicsEmbedding
 
@@ -830,13 +851,7 @@ x_mean_b = x_mean.view(1, 1, 1, 6)
 x_std_b = x_std.view(1, 1, 1, 6)
 
 device = torch.device("cpu")
-MAX_SEGMENTS = 100
-NUM_SAMPLES = 100000
 
 mean = x_mean_b.to(device)
 std = x_std_b.to(device)
 p_train_mass = dist.Uniform(theta_min[0], theta_max[0])
-
-# data = import_track('Grey_in_the_morning.fit')
-# data = import_track('gpx_files/Lena.gpx')
-# params = ride_analysis(data, sys_mass=None, NUM_SAMPLES=NUM_SAMPLES)

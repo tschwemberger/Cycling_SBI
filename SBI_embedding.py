@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 torch.set_num_threads(4)
 theta_min, theta_max = 0.0, 1.0
 
-V_ROLL, SIG_ROLL = 6.5, 1.0
-LAGS = (0, 1, 2, 3)              # candidate lags (samples) between kinematics and power; negatives allowed
+V_ROLL, SIG_ROLL = 6.0, 1.0
+LAGS = (-2, -1, 0, 1, 2)         # candidate lags (samples) between kinematics and power; negatives allowed
 ROBUST_C = 2.5                   # a window's weight drops below 0.5 once its misfit exceeds ROBUST_C x the ride median
 N_IRLS = 3                       # robust re-fit iterations
 N_REG = 5
@@ -13,6 +14,8 @@ N_REG = 5
 p_law_index = 0.25
 G = 9.81
 
+def sigmoid(x, loc, width):
+    return 1 / (1 + np.exp(-(x-loc)/width))
 
 def segment_regressors(x_phys):
     """x_phys: (..., T, 6) in physical units  ->  X: (..., T, 5), y: (..., T)."""
@@ -27,8 +30,10 @@ def segment_regressors(x_phys):
     x2 = v * G * cos_t                                                 # coefficient: m * Crr
     x3 = 0.5 * rho * v_air * v_air.abs() * v                            # coefficient: CdA
     # F_imp_over_m (k = 1) times v -> power/mass; power-law part and bump part kept separate
-    x4 = v * G * cos_t * (v + 1.0) ** p_law_index                       # coefficient: m * k
-    x5 = v * G * cos_t * torch.exp(-((v - V_ROLL) / SIG_ROLL) ** 2)   # coefficient: m * k * amp
+    x4 = (v * G * cos_t * (v + 1.0) ** p_law_index 
+          * ( 1 - 0.5*sigmoid(v, V_ROLL+2*SIG_ROLL, SIG_ROLL) ) )      # coefficient: m * k
+    x5 = (v * G * cos_t * torch.exp(-((v - V_ROLL) / SIG_ROLL) ** 2)
+          * ( 1 - 0.5*sigmoid(v, V_ROLL+2*SIG_ROLL, SIG_ROLL) ) )      # coefficient: m * k * amp
 
     return torch.stack([x1, x2, x3, x4, x5], dim=-1), P
 
