@@ -1,6 +1,7 @@
 import streamlit as st, torch, sys, tempfile, os
 import numpy as np
 import xml.etree.ElementTree as ET
+import SBI_inference
 from SBI_inference import ride_analysis, import_track, plot_fracs_grad
 import matplotlib.pyplot as plt
 from SBI_embedding import PhysicsEmbedding
