@@ -46,8 +46,8 @@ rcParams["font.family"] = "serif"
     
 cmap = plt.get_cmap("tab10")
 
-prior_min = np.array( [ 40.0,  0.17, 0.0015, 0.0001 ] )
-prior_max = np.array( [ 150.0, 0.50, 0.01,   0.015  ] )
+prior_min = np.array( [ 40.0,  0.12, 0.001, 0.0001 ] )
+prior_max = np.array( [ 150.0, 0.50, 0.01,  0.015  ] )
 
 p_law_index = 0.25
 G = 9.81
@@ -342,8 +342,6 @@ def process_track(lats, lons, z, times, power):
     z_gps = gaussian_filter(z_gps, sigma=10)
     z = complementary_filter(z, z_gps, alpha=0.995)
     
-    # Importing achival wind data including simulated gusts
-    print("Importing archival weather data...")
     base_wind_speed, wind_direction, wind_gusts, temp, pres = fetch_wind(
         lats, lons, times)
  
@@ -510,7 +508,21 @@ def ess(w):
     return 1.0 / np.sum(w**2)
 
 torch.set_num_threads(4)
-theta_min, theta_max = 0.0, 1.0
+slim = torch.load('training_data.pt')
+
+x_mean = slim['x_mean']
+x_std = slim['x_std']
+theta_min = slim['theta_min']
+theta_max = slim['theta_max']
+
+x_mean_b = x_mean.view(1, 1, 1, 6)
+x_std_b = x_std.view(1, 1, 1, 6)
+
+device = torch.device("cpu")
+
+mean = x_mean_b.to(device)
+std = x_std_b.to(device)
+p_train_mass = dist.Uniform(theta_min[0], theta_max[0])
 
 V_ROLL, SIG_ROLL = 6.0, 1.0
 LAGS = (-2, -1, 0, 1, 2)         # candidate lags (samples) between kinematics and power; negatives allowed
@@ -565,14 +577,11 @@ def analyze_ride(real_ride_tensor, USE_MASS_PRIOR=False, sys_mass=90, widths=Fal
         return med, ess(w)
 
 def clean_log_axis(axis):
-    axis.set_major_locator(LogLocator(base=10, numticks=10))
-    axis.set_minor_locator(LogLocator(base=10, subs=np.arange(2, 10), numticks=100))
-    axis.set_minor_formatter(NullFormatter())
-    axis.set_major_formatter(FixedFormatter(['0.3', '1', '3']))
-    axis.set_ticks([0.3, 1.0, 3.0])
+    axis.set_major_locator(FixedLocator([0.3, 1.0, 3.0, 10]))
+    axis.set_major_formatter(FixedFormatter(['0.3', '1', '3', '10']))
 
 def clean_cda_axis(axis):
-    axis.set_ticks([0.18, 0.26, 0.34, 0.42])
+    axis.set_ticks([0.2, 0.3, 0.4])
 
 def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=100000):
     if sys_mass is not None:
@@ -582,11 +591,11 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
 
     actual_segments = real_ride_tensor.shape[0]
     if actual_segments > MAX_SEGMENTS:
-        # Option A: If the real ride has more segments than your max training capacity 
+        # If the real ride has more segments than your max training capacity 
         indices = torch.linspace(0, actual_segments - 1, steps=MAX_SEGMENTS).long()
         x_observed = real_ride_tensor[indices]
     elif actual_segments < MAX_SEGMENTS:
-        # Option B: If it has fewer, zero-pad it exactly like we did the training data
+        # If it has fewer, zero-pad it exactly like we did the training data
         padding = torch.zeros((MAX_SEGMENTS - actual_segments, 90, 6))
         x_observed = torch.cat([real_ride_tensor, padding], dim=0)
     else:
@@ -604,7 +613,6 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
     mask_channel_obs = real_mask.float().view(1, MAX_SEGMENTS, 1, 1).expand(-1, -1, x_observed_norm.shape[2], -1)
     x_observed_norm = torch.cat([x_observed_norm, mask_channel_obs], dim=-1)
 
-    print("Drawing posterior samples...")
     samples_norm = posterior.sample((NUM_SAMPLES,), x=x_observed_norm)
     samples_phys = unscale_theta_to_phys(samples_norm)
 
@@ -845,7 +853,6 @@ def forces(params, speed, grad, rho):
     F_imp = m * F_imp_over_m(speed, grad, k, V_ROLL, SIG_ROLL, 1.0)
     return F_drag, F_rolling, F_imp, F_climb
 
-
 def steady_speed(params, power, grad, rho, v_max=40.0):
     """Speed (m/s) at which power = v * sum(F), i.e. zero acceleration, no wind."""
     def residual(v):
@@ -858,7 +865,7 @@ def steady_speed(params, power, grad, rho, v_max=40.0):
 
 def plot_fracs_grad(params, power, rho, ax=None):
     grads = np.geomspace(0.001, 0.2, 40)
-    names = ["Aero", "Rolling", "Surface", "Climbing"]
+    names = ["Aero", "Tires", "Surface", "Climbing"]
     colors = ["C2", "C3", "C4", "C0"]
 
     speeds = np.array([steady_speed(params, power, g, rho) for g in grads])
@@ -909,18 +916,3 @@ def plot_fracs_grad(params, power, rho, ax=None):
 sys.modules['__main__'].PhysicsEmbedding = PhysicsEmbedding
 
 posterior = torch.load('posterior.pt', weights_only=False)
-slim = torch.load('training_data.pt')
-
-x_mean = slim['x_mean']
-x_std = slim['x_std']
-theta_min = slim['theta_min']
-theta_max = slim['theta_max']
-
-x_mean_b = x_mean.view(1, 1, 1, 6)
-x_std_b = x_std.view(1, 1, 1, 6)
-
-device = torch.device("cpu")
-
-mean = x_mean_b.to(device)
-std = x_std_b.to(device)
-p_train_mass = dist.Uniform(theta_min[0], theta_max[0])

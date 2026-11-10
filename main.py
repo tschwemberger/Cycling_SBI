@@ -71,7 +71,7 @@ if up is not None:
             st.warning(f"The network infers a system mass from {m_lo:.1f} to {m_hi:.1f} with 68% confidence. This disagrees with your specified mass and may indicate a problem with the data such a power meter miscalibration or an inconsistency with the model such as unmodeled braking effects or strong correlations between parameters.")
 
     if np.abs(work_inf-work_rec)/work_rec > 0.1:
-        st.warning(f'At the inferred paramters, the work required in the clean segments is {int(work_inf/1e3)} kJ while the recorded work is {int(work_rec/1e3)} kJ, a difference of {int(100*np.abs(work_inf-work_rec)/work_rec)}\%. This indicates the model may be a poor fit to the data.')
+        st.warning(f'At the inferred paramters, the work required in the clean segments is {int(work_inf/1e3)} kJ while the recorded work is {int(work_rec/1e3)} kJ, a difference of {int(100*np.abs(work_inf-work_rec)/work_rec)}%. This indicates the model may be a poor fit to the data.')
 
     st.write('## Distribution of Losses While Pedaling')
     st.write('The pie chart below shows the distribution of losses while pedaling, based on the inferred parameters. The model estimates how much of your power is going into overcoming gravity, aerodynamic drag, rolling resistance, and surface vibration losses. The remaining power drives your accelerations. This chart does not reflect the recovery you get while coasting.')
