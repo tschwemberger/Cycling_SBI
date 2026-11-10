@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.distributions as dist
 from pathlib import Path
+from scipy.optimize import brentq
 from scipy.signal import lfilter
 from scipy.ndimage import binary_dilation, median_filter, gaussian_filter, uniform_filter1d, gaussian_filter1d
 import xml.etree.ElementTree as ET
@@ -18,7 +19,7 @@ from SBI_embedding import PhysicsEmbedding
 # import shutil
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import LogLocator, FixedFormatter, NullFormatter
+from matplotlib.ticker import LogLocator, FixedFormatter, NullFormatter, FixedLocator, NullLocator, FuncFormatter
 #Options
 my_colors = ['#785EF0', '#DC267F', '#FFB000', '#006352', 'turquoise', 'b', 'r', 'g', 'y']
 from matplotlib import rc, rcParams 
@@ -437,8 +438,6 @@ def process_ride_to_chunks(f_name, data=None, sample_rate_hz=1, window_duration_
     is_clean, flags = compute_clean_mask(t, speed, acceleration, power, grad, wind, rho,
                                         x=x, y=y, grad_limit=grad_limit,
                                         sample_rate_hz=sample_rate_hz)
-    tripped = {name: int(np.sum(f)) for name, f in flags.items() if np.any(f)}
-    print(f"flags tripped: {tripped}")
     
     # Find contiguous "clean" segments [cite: 125]
     clean_transitions = np.diff(is_clean.astype(int))
@@ -559,9 +558,9 @@ def analyze_ride(real_ride_tensor, USE_MASS_PRIOR=False, sys_mass=90, widths=Fal
 
     med = [wquantile(s[:, i], w, 0.5) for i in range(4)]
     if widths:
-        med25 = [wquantile(s[:, i], w, 0.25) for i in range(4)]
-        med75 = [wquantile(s[:, i], w, 0.75) for i in range(4)]
-        return (med25, med, med75), ess(w)
+        med_lo = [wquantile(s[:, i], w, 0.16) for i in range(4)]
+        med_hi = [wquantile(s[:, i], w, 0.84) for i in range(4)]
+        return (med_lo, med, med_hi), ess(w)
     else:
         return med, ess(w)
 
@@ -811,10 +810,12 @@ def ride_analysis(data, sys_mass=None, corner=True, pie=True, hist=True, inj_rec
     chunks = process_ride_to_chunks(f_name=None, data=data)
     ride_tensor = torch.tensor(chunks, dtype=torch.float32)
     num_segs = chunks.shape[0]
-    (m, cda, crr, k), n_eff = analyze_ride(ride_tensor, USE_MASS_PRIOR=False, sys_mass=sys_mass)
+    (lo, med, hi), n_eff = analyze_ride(ride_tensor, USE_MASS_PRIOR=False, sys_mass=sys_mass, widths=True)
+    (m, cda, crr, k) = med
     m0 = np.copy(m)
     if USE_MASS_PRIOR:
-        (m, cda, crr, k), n_eff = analyze_ride(ride_tensor, USE_MASS_PRIOR=USE_MASS_PRIOR, sys_mass=sys_mass)
+        (_, med, _), n_eff = analyze_ride(ride_tensor, USE_MASS_PRIOR=USE_MASS_PRIOR, sys_mass=sys_mass, widths=True)
+        (m, cda, crr, k) = med
     crr /= 100
     k /= 1e3
     work = None
@@ -832,7 +833,77 @@ def ride_analysis(data, sys_mass=None, corner=True, pie=True, hist=True, inj_rec
     if inj_rec is not None:
         test = inj_recov(chunks, (m, cda, crr, k), use_prior=USE_MASS_PRIOR,
                         n_rep=inj_rec, accel_sigma=3, accel_mode='smooth', sys_mass=sys_mass)
-    return (m, cda, crr, k), tuple(figs), m0, work, num_segs, test
+    return (m, cda, crr, k), tuple(figs), (lo[0], m0, hi[0]), work, num_segs, test
+
+def forces(params, speed, grad, rho):
+    """Resistive forces (N) at a given speed and grade. Positive = opposes motion."""
+    (m, cda, crr, k) = params
+    theta = np.arctan(grad)
+    F_climb = m * G * np.sin(theta)
+    F_rolling = crr * m * G * np.cos(theta)   # constant-force Crr, as in your current model
+    F_drag = 0.5 * rho * cda * speed**2
+    F_imp = m * F_imp_over_m(speed, grad, k, V_ROLL, SIG_ROLL, 1.0)
+    return F_drag, F_rolling, F_imp, F_climb
+
+
+def steady_speed(params, power, grad, rho, v_max=40.0):
+    """Speed (m/s) at which power = v * sum(F), i.e. zero acceleration, no wind."""
+    def residual(v):
+        return v * sum(forces(params, v, grad, rho)) - power
+
+    # residual(0) = -power < 0; residual(v_max) > 0 unless something is badly off
+    if residual(v_max) < 0:
+        return np.nan
+    return brentq(residual, 1e-3, v_max)
+
+def plot_fracs_grad(params, power, rho, ax=None):
+    grads = np.geomspace(0.001, 0.2, 40)
+    names = ["Aero", "Rolling", "Surface", "Climbing"]
+    colors = ["C2", "C3", "C4", "C0"]
+
+    speeds = np.array([steady_speed(params, power, g, rho) for g in grads])
+    # forces() returns (climb, rolling, drag, imp); reorder to match names/colors
+    fracs_raw = np.array([
+        [v * F / power for F in forces(params, v, g, rho)]
+        for v, g in zip(speeds, grads)
+    ])  # columns: climb, rolling, aero, surface
+    order = [0, 1, 2, 3]
+    fracs = fracs_raw[:, order]
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(9, 5))
+    fig = ax.figure
+
+    x = grads * 100
+    pos_bottom = np.zeros(len(grads))
+    neg_bottom = np.zeros(len(grads))
+    for i, (name, c) in enumerate(zip(names, colors)):
+        f = fracs[:, i]
+        is_pos = f >= 0
+        bottom = np.where(is_pos, pos_bottom, neg_bottom)
+        ax.fill_between(x, bottom * 100, (bottom + f) * 100,
+                        color=c, label=name, lw=0)
+        pos_bottom += np.where(is_pos, f, 0)
+        neg_bottom += np.where(~is_pos, f, 0)
+
+    ax.axhline(0, color="k", lw=0.8)
+    ax.set_xscale("log")
+    ax.set_xlim(x[0], x[-1])
+    ax.set_ylim(0, 100)
+    ticks = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20]
+    ax.xaxis.set_major_locator(FixedLocator(ticks))
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}%"))
+    ax.set_xlabel("Gradient")
+    ax.set_ylabel("Share of rider power (%)")
+    ax.legend(loc=(0.03, 1.02), ncol=2)
+
+    ax2 = ax.twinx()
+    ax2.plot(x, speeds * 3.6, c="k", lw=2, label="Steady speed")
+    ax2.set_ylabel("Steady-state speed (km/h)")
+    ax2.set_ylim(bottom=0)
+    ax2.legend(loc=(0.66, 1.05))
+    return fig, (grads, speeds, fracs)
 
 
 sys.modules['__main__'].PhysicsEmbedding = PhysicsEmbedding
