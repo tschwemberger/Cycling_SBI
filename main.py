@@ -1,12 +1,6 @@
 import streamlit as st, torch, sys, tempfile, os
 import numpy as np
 import xml.etree.ElementTree as ET
-import SBI_inference, inspect, os, time
-st.write(SBI_inference.__file__)
-st.write(time.ctime(os.path.getmtime(SBI_inference.__file__)))
-st.write([n for n in dir(SBI_inference) if "plot" in n or n in ("forces", "steady_speed")])
-st.write(len(inspect.getsource(SBI_inference).splitlines()))
-# st.stop()
 from SBI_inference import ride_analysis, import_track, plot_fracs_grad
 from SBI_embedding import PhysicsEmbedding
 import fitdecode
