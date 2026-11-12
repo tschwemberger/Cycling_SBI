@@ -582,6 +582,10 @@ def clean_log_axis(axis):
     axis.set_major_locator(FixedLocator([0.3, 1.0, 3.0, 10]))
     axis.set_major_formatter(FixedFormatter(['0.3', '1', '3', '10']))
 
+def clean_crr_axis(axis):
+    axis.set_major_locator(FixedLocator([3, 5, 8]))
+    axis.set_major_formatter(FixedFormatter(['3', '5', '8']))
+
 def clean_cda_axis(axis):
     axis.set_ticks([0.2, 0.3, 0.4])
 
@@ -666,6 +670,8 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
     axes = np.array(fig.axes).reshape(4, 4)
     clean_log_axis(axes[3, 3].xaxis)          # k_surf histogram (x axis)
     clean_log_axis(axes[3, 0].yaxis)          # k_surf on the y axis of the bottom row
+    clean_crr_axis(axes[3, 2].xaxis)
+    clean_crr_axis(axes[2, 0].yaxis)
     clean_cda_axis(axes[3, 1].xaxis)
     clean_cda_axis(axes[1, 0].yaxis)
 
