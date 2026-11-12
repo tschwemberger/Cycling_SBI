@@ -54,7 +54,8 @@ if up is not None:
         with st.spinner("Inferring posterior distributions..."):
             st.session_state.analysis = ride_analysis(ride, sys_mass=sys_mass, NUM_SAMPLES=100000)
         st.session_state.analysis_key = analysis_key
-    params, (corner_fig, pie_fig, hist_fig), (m_lo, m0, m_hi), work, num_segs, test = st.session_state.analysis
+    params, (corner_fig, pie_fig, hist_figs), (m_lo, m0, m_hi), work, num_segs, test = st.session_state.analysis
+    grad_hist, speed_hist = hist_figs
     work_inf, work_rec = work
 
     ext = os.path.splitext(up.name)[1].lower()   # ".gpx" or ".fit"
@@ -81,16 +82,17 @@ if up is not None:
 
     power_plot_section(params, rho[0], int(np.mean(power)))
     
-    st.write('## Posterior Distributions of Parameters')
-    st.pyplot(corner_fig)
-    st.write('The corner plot above shows the posterior distributions of the parameters inferred from your ride data. The diagonal plots show the marginal distributions of each parameter, while the off-diagonal plots show the pairwise joint distributions. If the marginal distributions are piled at the end of the window, it may indicate that the true value is outside the range of the prior. A diagonal band in the joint distributions indicates a correlation between parameters.')
+    with st.expander("Advanced: posterior distributions and data selection", expanded=False):
+        st.write('## Posterior Distributions of Parameters')
+        st.pyplot(corner_fig)
+        st.write('The corner plot above shows the posterior distributions of the parameters inferred from your ride data. The diagonal plots show the marginal distributions of each parameter, while the off-diagonal plots show the pairwise joint distributions. If the marginal distributions are piled at the end of the window, it may indicate that the true value is outside the range of the prior. A diagonal band in the joint distributions indicates a correlation between parameters.')
     
-    st.write('The model assumes surface vibrational losses are a fixed function of only speed. If the quality of the surface is correlated with other parameters such as gradient, this may result in degeneracies in the inferred parameters. For instance, if rough surfaces are strongly correlated with steep gradients, the model will have difficulty distinguishing higher mass from higher surface losses. The resolution of the network is limited by the number of samples, GPS noise, and barometric glitches. The effect of hysteretical losses $(C_{rr})$ is generally below this threshold, so that panel should be viewed as a rough estimate, largely degenerate with surface losses $(C_{rr}^{(i)})$.')
+        st.write('The model assumes surface vibrational losses are a fixed function of only speed. If the quality of the surface is correlated with other parameters such as gradient, this may result in degeneracies in the inferred parameters. For instance, if rough surfaces are strongly correlated with steep gradients, the model will have difficulty distinguishing higher mass from higher surface losses. The resolution of the network is limited by the number of samples, GPS noise, and barometric glitches. The effect of hysteretical losses $(C_{rr})$ is generally below this threshold, so that panel should be viewed as a rough estimate, largely degenerate with surface losses $(C_{rr}^{(i)})$.')
     
-    st.write('Also note that the function defining surface losses is not well studied. As such, it is defined with a wide range of marginalized parameters allowing it to act as a "sink" term, soaking up all losses which do not fit the other, well modeled parameters. This makes it particularly sensitive to features like unmodeled braking.')
+        st.write('Also note that the function defining surface losses is not well studied. As such, it is defined with a wide range of marginalized parameters allowing it to act as a "sink" term, soaking up all losses which do not fit the other, well modeled parameters. This makes it particularly sensitive to features like unmodeled braking.')
 
-    show_hist = st.checkbox("Show selection bias in segment filering", value=False)
-    if show_hist:
         st.write('### Selection of Data')
+        st.write('The network relies on having good data across a range of speeds to break the degeneracy between the $C_d A$ parameters. Here you can see the distribution of speeds in all data and the clean segments')
+        st.pyplot(speed_hist)
         st.write('The selection criteria for the 90s windows may bias your results towards climbing sections since they are much more likely to survive the filters. Here you can see how the full data set compares to the subset which the network finds to be useable. Note that all steep descents are removed as are corners, suspected braking, and hike-a-bikes.')
-        st.pyplot(hist_fig)
+        st.pyplot(grad_hist)

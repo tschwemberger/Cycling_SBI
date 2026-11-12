@@ -17,14 +17,17 @@ G = 9.81
 def sigmoid(x, loc, width):
     return 1 / (1 + np.exp(-(x-loc)/width))
 
-def segment_regressors(x_phys):
-    """x_phys: (..., T, 6) in physical units  ->  X: (..., T, 5), y: (..., T)."""
+def segment_regressors(x_phys, wind_sign=-1.0):
+    """x_phys: (..., T, 6) in physical units  ->  X: (..., T, 5), y: (..., T).
+
+    The wind channel is positive for a TAILWIND, so airspeed = v - wind (wind_sign = -1).
+    wind_sign = +1 reproduces the old (incorrect) v + wind used by posteriors trained before the fix."""
     P, v, a, grad, wind, rho = x_phys.unbind(-1)
     v = v.clamp(min=0.0)
 
     cos_t = 1.0 / torch.sqrt(1.0 + grad ** 2)       # grad = rise/run
     sin_t = grad * cos_t
-    v_air = v + wind
+    v_air = v + wind_sign * wind
 
     x1 = v * (a + G * sin_t)                                           # coefficient: m
     x2 = v * G * cos_t                                                 # coefficient: m * Crr
@@ -63,6 +66,7 @@ class PhysicsEmbedding(nn.Module):
         self.register_buffer("x_std", None if x_std is None else x_std.reshape(1, 1, 1, C).clone())
         self.register_buffer("beta_scale", torch.tensor(beta_scale, dtype=torch.float64))
         self.sigma_p = sigma_p
+        self.wind_sign = -1.0       # airspeed = v - wind; pickled pre-fix models lack this and fall back to +1
         self.register_buffer("iu", torch.triu_indices(N_REG, N_REG, offset=1), persistent=False)
 
         self.mlp = nn.Sequential(
@@ -101,7 +105,7 @@ class PhysicsEmbedding(nn.Module):
         P, wind, grad, accel = x_phys[..., 0], x_phys[..., 4], x_phys[..., 3], x_phys[..., 2]
 
         # ---- 1. per-window normal equations at every candidate lag, in units where beta'=beta/scale, noise=1
-        X, y = segment_regressors(x_phys)                     # (B,S,T,K), (B,S,T)
+        X, y = segment_regressors(x_phys, getattr(self, "wind_sign", 1.0))   # (B,S,T,K), (B,S,T)
         X = X * self.beta_scale / self.sigma_p
         y = y / self.sigma_p
         y_start = max(0, -min(LAGS))

@@ -46,7 +46,7 @@ rcParams["font.family"] = "serif"
     
 cmap = plt.get_cmap("tab10")
 
-prior_min = np.array( [ 40.0,  0.12, 0.001, 0.0001 ] )
+prior_min = np.array( [ 40.0,  0.12, 0.002, 0.0001 ] )
 prior_max = np.array( [ 150.0, 0.50, 0.01,  0.015  ] )
 
 p_law_index = 0.25
@@ -61,13 +61,14 @@ def F_imp_over_m(v, grad, k, v_roll, sigma_roll, amp):
              * ( (v+1)**p_law_index + amp * np.exp(-( ( v-v_roll) / sigma_roll )**2) ) )
              * ( 1 - 0.33*sigmoid(v, v_roll+2*sigma_roll, sigma_roll) ) )
 
-def accel_min(grad, speed, wind, rho, params_l=prior_min, params_h=prior_max, imp_params=(1,5,1)):
+def accel_min(grad, speed, wind, rho, params_l=prior_min, params_h=prior_max, imp_params=(1,6,1)):
     m_min, CdA_min, Crr_min, k_min = params_l
     m_max, CdA_max, Crr_max, k_max = params_h
     amp, v_roll, sigma_roll = imp_params
     theta = np.arctan(grad)
+    v_air = speed - wind                       # wind > 0 is a tailwind
     return -(G * np.sin(theta) + G * Crr_max * np.cos(theta)
-             + 0.5*rho * CdA_max * (speed+wind)**2/m_min
+             + 0.5*rho * CdA_max * v_air*np.abs(v_air)/m_min
              + F_imp_over_m(speed, grad, k_max, v_roll, sigma_roll, amp))
 
 def braking_mask(accel, power, speed, grad, wind, rho, P_lo=30.0, t_strong=0.7,
@@ -514,6 +515,7 @@ x_mean = slim['x_mean']
 x_std = slim['x_std']
 theta_min = slim['theta_min']
 theta_max = slim['theta_max']
+print(10**theta_min)
 
 x_mean_b = x_mean.view(1, 1, 1, 6)
 x_std_b = x_std.view(1, 1, 1, 6)
@@ -640,7 +642,7 @@ def plot_corner(real_ride_tensor, sys_mass=None, MAX_SEGMENTS=100, NUM_SAMPLES=1
     k_idx  = 3  # Column index of k_surf
     n_bins = 20  # or whatever bin count you use for the other axes
 
-    axes_scale = ["linear", "linear", "linear", "log"]
+    axes_scale = ["linear", "linear", "log", "log"]
     def weighted_quantile(x, q, w=None):
         if w is None:
             return np.quantile(x, q)
@@ -707,7 +709,7 @@ def plot_pie(data, inf_theta, title, out_name=None):
                                 np.sum(p_imp[mask])])
     
     percentages = 100 * inferred_powers / inferred_powers.sum()
-    labels = ['Climbs', 'Accelerations', 'Aero', 'Tires', 'Surface']
+    labels = ['Climbs', 'Accelerations', 'Aero', 'Rolling', 'Impedance']
     legend_labels = [f'{label} ('+f'{pct:.1f}'+r'%)' for label, pct in zip(labels, percentages)]
 
     fig, ax = plt.subplots(figsize=(7, 6))
@@ -730,14 +732,25 @@ def plot_pie(data, inf_theta, title, out_name=None):
     return inferred_powers, fig, (np.sum(inferred_powers), np.sum(power[mask]))
 
 def plot_histogram(data, chunks):
-    power, speed, accel, grad, wind, rho = chunks.reshape(-1, 6).T * 100
+    power, speed, accel, grad, wind, rho = chunks.reshape(-1, 6).T
+    grad *= 100
     grad2 = data[7]*100
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.hist([gaussian_filter1d(grad, 10), grad2], bins=100, label=['Used segments', 'All data'])
     ax.set_title('Gradient Distribution')
     ax.set_xlabel(r'Gradient $(\%)$')
     ax.legend()
-    return fig
+    ax.set_xlim(-15, 15)
+
+    speed2 = data[9]*3.6
+    speed *= 3.6
+    fig2, ax2 = plt.subplots(figsize=(7, 6))
+    ax2.hist([gaussian_filter1d(speed, 3), gaussian_filter1d(speed2, 3)], bins=100, label=['Used segments', 'All data'])
+    ax2.set_title('Speed Distribution')
+    ax2.set_xlabel('Speed km/h')
+    ax2.legend()
+    ax2.set_xlim(0, 40)
+    return (fig, fig2)
 
 PARAM_NAMES = ['mass', 'CdA', 'Crr', 'k']
 
@@ -865,7 +878,7 @@ def steady_speed(params, power, grad, rho, v_max=40.0):
 
 def plot_fracs_grad(params, power, rho, ax=None):
     grads = np.geomspace(0.001, 0.2, 40)
-    names = ["Aero", "Tires", "Surface", "Climbing"]
+    names = ["Aero", "Rolling", "Impedance", "Climbing"]
     colors = ["C2", "C3", "C4", "C0"]
 
     speeds = np.array([steady_speed(params, power, g, rho) for g in grads])
