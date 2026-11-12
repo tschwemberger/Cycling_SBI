@@ -581,10 +581,12 @@ def analyze_ride(real_ride_tensor, USE_MASS_PRIOR=False, sys_mass=90, widths=Fal
 def clean_log_axis(axis):
     axis.set_major_locator(FixedLocator([0.3, 1.0, 3.0, 10]))
     axis.set_major_formatter(FixedFormatter(['0.3', '1', '3', '10']))
+    axis.set_minor_formatter(NullFormatter())    # log axes label minor ticks when the range is < ~1 decade
 
 def clean_crr_axis(axis):
     axis.set_major_locator(FixedLocator([3, 5, 8]))
     axis.set_major_formatter(FixedFormatter(['3', '5', '8']))
+    axis.set_minor_formatter(NullFormatter())    # otherwise matplotlib adds its own 4, 6, ... labels
 
 def clean_cda_axis(axis):
     axis.set_ticks([0.2, 0.3, 0.4])
