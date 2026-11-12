@@ -8,6 +8,7 @@ from SBI_embedding import PhysicsEmbedding
 import fitdecode
 import hashlib
 sys.modules['__main__'].PhysicsEmbedding = PhysicsEmbedding
+# Why do I need to do this
 
 @st.fragment
 def power_plot_section(params, rho0, default_power):
