@@ -16,7 +16,7 @@ import requests
 import srtm
 from datetime import datetime, timezone
 from SBI_embedding import PhysicsEmbedding
-# import shutil
+# why doesn't this work
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import LogLocator, FixedFormatter, NullFormatter, FixedLocator, NullLocator, FuncFormatter
