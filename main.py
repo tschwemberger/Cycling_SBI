@@ -55,7 +55,6 @@ if up is not None:
             st.session_state.analysis = ride_analysis(ride, sys_mass=sys_mass, NUM_SAMPLES=100000)
         st.session_state.analysis_key = analysis_key
     params, (corner_fig, pie_fig, hist_figs), (m_lo, m0, m_hi), work, num_segs, test = st.session_state.analysis
-    grad_hist, speed_hist = hist_figs
     work_inf, work_rec = work
 
     ext = os.path.splitext(up.name)[1].lower()   # ".gpx" or ".fit"
@@ -93,6 +92,6 @@ if up is not None:
 
         st.write('### Selection of Data')
         st.write('The network relies on having good data across a range of speeds to break the degeneracy between the $C_d A$ parameters. Here you can see the distribution of speeds in all data and the clean segments')
-        st.pyplot(speed_hist)
+        st.pyplot(hist_figs[0])
         st.write('The selection criteria for the 90s windows may bias your results towards climbing sections since they are much more likely to survive the filters. Here you can see how the full data set compares to the subset which the network finds to be useable. Note that all steep descents are removed as are corners, suspected braking, and hike-a-bikes.')
-        st.pyplot(grad_hist)
+        st.pyplot(hist_figs[1])

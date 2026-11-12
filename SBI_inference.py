@@ -750,7 +750,7 @@ def plot_histogram(data, chunks):
     ax2.set_xlabel('Speed km/h')
     ax2.legend()
     ax2.set_xlim(0, 40)
-    return (fig, fig2)
+    return tuple([fig, fig2])
 
 PARAM_NAMES = ['mass', 'CdA', 'Crr', 'k']
 
