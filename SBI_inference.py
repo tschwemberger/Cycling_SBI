@@ -733,23 +733,24 @@ def plot_pie(data, inf_theta, title, out_name=None):
 
 def plot_histogram(data, chunks):
     power, speed, accel, grad, wind, rho = chunks.reshape(-1, 6).T
-    grad *= 100
+    grad = grad * 100                 # not in place: these are views into the caller's chunks
     grad2 = data[7]*100
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.hist([gaussian_filter1d(grad, 10), grad2], bins=100, label=['Used segments', 'All data'])
     ax.set_title('Gradient Distribution')
     ax.set_xlabel(r'Gradient $(\%)$')
     ax.legend()
-    ax.set_xlim(-15, 15)
+    g_lo, g_hi = np.nanpercentile(grad2, [2.5, 97.5])    # central 95% of all data
+    ax.set_xlim(g_lo, g_hi)
 
-    speed2 = data[9]*3.6
-    speed *= 3.6
+    speed2 = gaussian_filter1d(data[9]*3.6, 3)
+    speed = speed * 3.6
     fig2, ax2 = plt.subplots(figsize=(7, 6))
-    ax2.hist([gaussian_filter1d(speed, 3), gaussian_filter1d(speed2, 3)], bins=100, label=['Used segments', 'All data'])
+    ax2.hist([gaussian_filter1d(speed, 3), speed2], bins=100, label=['Used segments', 'All data'])
     ax2.set_title('Speed Distribution')
     ax2.set_xlabel('Speed km/h')
     ax2.legend()
-    ax2.set_xlim(0, 40)
+    ax2.set_xlim(0, np.nanpercentile(speed2, 99))       # lower edge fixed at 0, 95% of all data below the upper
     return tuple([fig, fig2])
 
 PARAM_NAMES = ['mass', 'CdA', 'Crr', 'k']

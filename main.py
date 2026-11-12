@@ -92,6 +92,6 @@ if up is not None:
 
         st.write('### Selection of Data')
         st.write('The network relies on having good data across a range of speeds to break the degeneracy between the $C_d A$ parameters. Here you can see the distribution of speeds in all data and the clean segments')
-        st.pyplot(hist_figs[0])
-        st.write('The selection criteria for the 90s windows may bias your results towards climbing sections since they are much more likely to survive the filters. Here you can see how the full data set compares to the subset which the network finds to be useable. Note that all steep descents are removed as are corners, suspected braking, and hike-a-bikes.')
         st.pyplot(hist_figs[1])
+        st.write('The selection criteria for the 90s windows may bias your results towards climbing sections since they are much more likely to survive the filters. Here you can see how the full data set compares to the subset which the network finds to be useable. Note that all steep descents are removed as are corners, suspected braking, and hike-a-bikes.')
+        st.pyplot(hist_figs[0])
